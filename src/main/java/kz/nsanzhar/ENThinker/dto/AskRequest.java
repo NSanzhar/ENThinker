@@ -6,4 +6,5 @@ import lombok.Data;
 public class AskRequest {
     private String question;
     private int topK;
+    private Double minScore;
 }

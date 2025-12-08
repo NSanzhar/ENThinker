@@ -24,10 +24,14 @@ public class EmbeddingService {
     }
 
     public Mono<float[]> embed(String text) {
+        // Валидация входных данных
+        if (text == null || text.isBlank()) {
+            return Mono.error(new IllegalArgumentException("Text cannot be empty"));
+        }
 
         var requestBody = new EmbedRequest(
                 "models/" + embedModel,
-                new Content( new Part[]{ new Part(text) } )
+                new Content(new Part[]{new Part(text)})
         );
 
         return geminiClient.post()
@@ -39,10 +43,18 @@ public class EmbeddingService {
                 .retrieve()
                 .bodyToMono(EmbedResponse.class)
                 .map(resp -> {
+                    if (resp.embedding() == null || resp.embedding().values() == null) {
+                        throw new RuntimeException("Empty embedding response");
+                    }
+
                     double[] d = resp.embedding().values();
                     float[] f = new float[d.length];
                     for (int i = 0; i < d.length; i++) f[i] = (float) d[i];
                     return f;
+                })
+                .onErrorResume(e -> {
+                    System.err.println("❌ Embedding error: " + e.getMessage());
+                    return Mono.error(new RuntimeException("Failed to generate embeddings: " + e.getMessage()));
                 });
     }
 

@@ -1,5 +1,6 @@
 package kz.nsanzhar.ENThinker.service;
 
+import kz.nsanzhar.ENThinker.dto.VectorSearchResult;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,19 +26,18 @@ public class VectorService {
      * UPSERT with subject
      */
     public Mono<Void> upsert(String id, float[] vector, String text, String subject) {
-
         var payload = new HashMap<String, Object>();
         payload.put("text", text);
         payload.put("subject", subject);
 
         var point = new HashMap<String, Object>();
-        point.put("id", UUID.randomUUID().toString()); // Используем UUID как строку
+        point.put("id", UUID.randomUUID().toString());
         point.put("vector", vector);
         point.put("payload", payload);
 
         var body = Map.of("points", List.of(point));
 
-        return qdrantClient.put() // PUT вместо POST для upsert
+        return qdrantClient.put()
                 .uri("/collections/" + collection + "/points")
                 .bodyValue(body)
                 .retrieve()
@@ -47,11 +47,10 @@ public class VectorService {
     /**
      * SEARCH
      */
-    public Mono<List<SearchResult>> search(float[] vector, int topK) {
-
+    public Mono<List<VectorSearchResult>> search(float[] vector, int topK) {
         var body = Map.of(
                 "vector", vector,
-                "limit", topK, // limit вместо top
+                "limit", topK,
                 "with_payload", true
         );
 
@@ -63,17 +62,8 @@ public class VectorService {
                 .map(resp -> resp.result);
     }
 
-    // ----- DTOs -----
-
     @Data
-    public static class SearchResult {
-        public String id;
-        public double score;
-        public Map<String, Object> payload;
-    }
-
-    @Data
-    public static class SearchResponse {
-        public List<SearchResult> result;
+    static class SearchResponse {
+        public List<VectorSearchResult> result;
     }
 }
