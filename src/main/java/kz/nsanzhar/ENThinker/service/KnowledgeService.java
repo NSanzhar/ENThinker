@@ -3,7 +3,7 @@ package kz.nsanzhar.ENThinker.service;
 import kz.nsanzhar.ENThinker.dto.IngestRequest;
 import kz.nsanzhar.ENThinker.dto.AskRequest;
 import kz.nsanzhar.ENThinker.dto.RagResponse;
-import kz.nsanzhar.ENThinker.dto.VectorSearchResult; // ← ОБНОВИТЬ ИМПОРТ
+import kz.nsanzhar.ENThinker.dto.VectorSearchResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -61,12 +61,30 @@ public class KnowledgeService {
         return embeddingService.embed(question)
                 .flatMap(vector -> vectorService.search(vector, topK))
                 .flatMap(results -> {
-                    // Теперь тип VectorSearchResult вместо VectorService.SearchResult
+
+                    // 1. Фильтрация по порогу
                     List<VectorSearchResult> filteredResults = results.stream()
                             .filter(r -> r.getScore() >= threshold)
-                            .collect(Collectors.toList());
+                            .toList();
 
-                    if (filteredResults.isEmpty()) {
+                    // 2. Дедупликация по subject + text
+                    List<VectorSearchResult> uniqueResults = filteredResults.stream()
+                            .collect(Collectors.toMap(
+                                    r -> {
+                                        Object text = r.getPayload().get("text");
+                                        Object subject = r.getPayload().get("subject");
+                                        String s = (subject != null ? subject.toString() : "general");
+                                        String t = (text != null ? text.toString() : "");
+                                        return s + "||" + t;
+                                    },
+                                    r -> r,
+                                    (existing, duplicate) -> existing // если дубль – оставляем первый
+                            ))
+                            .values()
+                            .stream()
+                            .toList();
+
+                    if (uniqueResults.isEmpty()) {
                         return Mono.just(new RagResponse(
                                 "❌ I don't have enough information to answer this question. " +
                                         "The knowledge base doesn't contain relevant data (found " +
@@ -78,7 +96,8 @@ public class KnowledgeService {
                     }
 
                     StringBuilder context = new StringBuilder();
-                    List<RagResponse.SourceInfo> sources = filteredResults.stream()
+
+                    List<RagResponse.SourceInfo> sources = uniqueResults.stream()
                             .map(result -> {
                                 Object text = result.getPayload().get("text");
                                 Object subject = result.getPayload().get("subject");
@@ -94,7 +113,7 @@ public class KnowledgeService {
                                         result.getId()
                                 );
                             })
-                            .collect(Collectors.toList());
+                            .toList();
 
                     if (context.length() == 0) {
                         return Mono.just(new RagResponse(
@@ -108,7 +127,7 @@ public class KnowledgeService {
                             .map(answer -> new RagResponse(
                                     answer,
                                     sources,
-                                    results.size()
+                                    uniqueResults.size()   // считаем уже без дублей
                             ));
                 })
                 .onErrorResume(e -> {
