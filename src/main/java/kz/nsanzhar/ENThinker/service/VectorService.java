@@ -22,9 +22,6 @@ public class VectorService {
     @Value("${qdrant.collection}")
     private String collection;
 
-    /**
-     * UPSERT with subject
-     */
     public Mono<Void> upsert(String id, float[] vector, String text, String subject) {
         var payload = new HashMap<String, Object>();
         payload.put("text", text);
@@ -44,9 +41,6 @@ public class VectorService {
                 .bodyToMono(Void.class);
     }
 
-    /**
-     * SEARCH
-     */
     public Mono<List<VectorSearchResult>> search(float[] vector, int topK) {
         var body = Map.of(
                 "vector", vector,

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ENThinker - RAG Knowledge Base</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .tab-active {
+            background: white;
+            color: #667eea;
+        }
+        .source-card {
+            transition: transform 0.2s;
+        }
+        .source-card:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="p-4">
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="text-center text-white mb-8 py-8">
+        <h1 class="text-4xl font-bold mb-2">🧠 ENThinker - RAG Knowledge Base</h1>
+        <p class="text-xl opacity-90">AI-Powered Learning & Assessment Platform</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="glass rounded-t-lg p-1 flex gap-2 mb-0">
+        <button onclick="switchTab('rag')" id="tab-rag" class="tab-active flex-1 py-3 px-6 rounded font-semibold transition">
+            RAG Search
+        </button>
+        <button onclick="switchTab('quiz')" id="tab-quiz" class="flex-1 py-3 px-6 rounded font-semibold text-white transition hover:bg-white/10">
+            Quiz
+        </button>
+    </div>
+
+    <!-- RAG Tab -->
+    <div id="content-rag" class="glass rounded-b-lg p-8">
+        <div class="max-w-3xl mx-auto">
+            <div class="mb-6">
+                    <textarea
+                            id="rag-question"
+                            rows="3"
+                            class="w-full p-4 rounded-lg border-2 border-white/30 bg-white/90 focus:outline-none focus:border-purple-400"
+                            placeholder="Ask anything from the knowledge base..."></textarea>
+                <button onclick="askQuestion()" class="mt-4 w-full bg-white text-purple-600 py-3 px-6 rounded-lg font-semibold hover:bg-purple-50 transition">
+                    🔍 Search
+                </button>
+            </div>
+
+            <div id="rag-loading" class="hidden text-center text-white py-8">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+                <p class="mt-4">Searching knowledge base...</p>
+            </div>
+
+            <div id="rag-answer" class="hidden">
+                <div class="bg-white/90 rounded-lg p-6 mb-4">
+                    <h3 class="font-bold text-lg mb-3 text-purple-900">Answer:</h3>
+                    <div id="answer-text" class="text-gray-800 whitespace-pre-wrap"></div>
+                </div>
+
+                <div class="bg-white/90 rounded-lg p-6">
+                    <h3 class="font-bold text-lg mb-3 text-purple-900">Sources (<span id="source-count">0</span>):</h3>
+                    <div id="sources-list" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quiz Tab -->
+    <div id="content-quiz" class="hidden glass rounded-b-lg p-8">
+        <!-- Quiz Start -->
+        <div id="quiz-start" class="max-w-2xl mx-auto text-center">
+            <h2 class="text-2xl font-bold text-white mb-6">Start New Quiz</h2>
+            <div class="bg-white/90 rounded-lg p-6 space-y-4">
+                <div>
+                    <label class="block text-left font-semibold mb-2">Subject:</label>
+                    <select id="quiz-subject" class="w-full p-3 rounded border-2 border-gray-300 focus:border-purple-400 focus:outline-none">
+                        <option value="geography">Geography</option>
+                        <option value="math">Math</option>
+                        <option value="history_kz">History KZ</option>
+                        <option value="kazakh">Kazakh Language</option>
+                        <option value="world_history">World History</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-left font-semibold mb-2">Number of Questions:</label>
+                    <input type="number" id="quiz-count" value="10" min="1" max="20"
+                           class="w-full p-3 rounded border-2 border-gray-300 focus:border-purple-400 focus:outline-none">
+                </div>
+                <button onclick="startQuiz()" class="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 transition">
+                    Start Quiz
+                </button>
+            </div>
+        </div>
+
+        <!-- Quiz Questions -->
+        <div id="quiz-questions" class="hidden max-w-3xl mx-auto">
+            <div class="bg-white/90 rounded-lg p-6 mb-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-purple-900">Quiz in Progress</h3>
+                    <span id="quiz-progress" class="text-gray-600">Question 1 of 10</span>
+                </div>
+                <div id="questions-container" class="space-y-6"></div>
+                <button onclick="submitQuiz()" class="mt-6 w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 transition">
+                    Submit Answers
+                </button>
+            </div>
+        </div>
+
+        <!-- Quiz Results -->
+        <div id="quiz-results" class="hidden max-w-3xl mx-auto">
+            <div class="bg-white/90 rounded-lg p-6">
+                <div class="text-center mb-6">
+                    <h3 class="text-2xl font-bold text-purple-900 mb-2">Quiz Results</h3>
+                    <div class="text-5xl font-bold mb-2" id="score-display">0%</div>
+                    <p class="text-gray-600" id="score-text">0 out of 0 correct</p>
+                </div>
+                <div id="results-details" class="space-y-4"></div>
+                <button onclick="resetQuiz()" class="mt-6 w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 transition">
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = 'http://localhost:8080/api';
+    let quizSession = null;
+    let quizData = null;
+    let userAnswers = {};
+
+    // Tab Switching
+    function switchTab(tab) {
+        document.querySelectorAll('[id^="tab-"]').forEach(el => {
+            el.classList.remove('tab-active');
+            el.classList.add('text-white');
+        });
+        document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
+
+        document.getElementById('tab-' + tab).classList.add('tab-active');
+        document.getElementById('tab-' + tab).classList.remove('text-white');
+        document.getElementById('content-' + tab).classList.remove('hidden');
+    }
+
+    // RAG Search
+    async function askQuestion() {
+        const question = document.getElementById('rag-question').value.trim();
+        if (!question) return alert('Please enter a question');
+
+        document.getElementById('rag-loading').classList.remove('hidden');
+        document.getElementById('rag-answer').classList.add('hidden');
+
+        try {
+            const response = await fetch(`${API_BASE}/knowledge/ask`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({question, topK: 5})
+            });
+
+            const data = await response.json();
+            document.getElementById('answer-text').textContent = data.answer;
+            document.getElementById('source-count').textContent = data.totalSourcesFound;
+
+            const sourcesList = document.getElementById('sources-list');
+            sourcesList.innerHTML = data.sources.map(src => `
+                <div class="source-card border-l-4 ${getScoreColor(src.score)} bg-white p-4 rounded">
+                    <div class="flex justify-between mb-2">
+                        <span class="font-semibold text-purple-900">${src.subject}</span>
+                        <span class="px-2 py-1 rounded text-sm ${getScoreBadge(src.score)}">${(src.score * 100).toFixed(1)}%</span>
+                    </div>
+                    <p class="text-gray-700 text-sm">${src.text}</p>
+                </div>
+            `).join('');
+
+            document.getElementById('rag-loading').classList.add('hidden');
+            document.getElementById('rag-answer').classList.remove('hidden');
+        } catch (error) {
+            alert('Error: ' + error.message);
+            document.getElementById('rag-loading').classList.add('hidden');
+        }
+    }
+
+    function getScoreColor(score) {
+        if (score >= 0.7) return 'border-green-500';
+        if (score >= 0.5) return 'border-yellow-500';
+        return 'border-red-500';
+    }
+
+    function getScoreBadge(score) {
+        if (score >= 0.7) return 'bg-green-100 text-green-800';
+        if (score >= 0.5) return 'bg-yellow-100 text-yellow-800';
+        return 'bg-red-100 text-red-800';
+    }
+
+    // Quiz Functions
+    async function startQuiz() {
+        const subject = document.getElementById('quiz-subject').value;
+        const count = parseInt(document.getElementById('quiz-count').value);
+
+        try {
+            const response = await fetch(`${API_BASE}/quiz/start`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({subject, questionCount: count})
+            });
+
+            quizData = await response.json();
+            quizSession = quizData.sessionId;
+            userAnswers = {};
+
+            displayQuestions();
+            document.getElementById('quiz-start').classList.add('hidden');
+            document.getElementById('quiz-questions').classList.remove('hidden');
+        } catch (error) {
+            alert('Error starting quiz: ' + error.message);
+        }
+    }
+
+    function displayQuestions() {
+        const container = document.getElementById('questions-container');
+        container.innerHTML = quizData.questions.map(q => `
+            <div class="border-b pb-4">
+                <p class="font-semibold mb-3">${q.number}. ${q.question}</p>
+                <div class="space-y-2 pl-4">
+                    ${['A', 'B', 'C', 'D'].map(opt => `
+                        <label class="flex items-start cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="radio" name="q${q.number}" value="${opt}"
+                                onchange="userAnswers[${q.number}] = '${opt}'" class="mt-1 mr-3">
+                            <span>${opt}) ${q['option' + opt]}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function submitQuiz() {
+        if (Object.keys(userAnswers).length < quizData.questions.length) {
+            if (!confirm('You haven\'t answered all questions. Submit anyway?')) return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/quiz/check`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sessionId: quizSession, answers: userAnswers})
+            });
+
+            const results = await response.json();
+            displayResults(results);
+            document.getElementById('quiz-questions').classList.add('hidden');
+            document.getElementById('quiz-results').classList.remove('hidden');
+        } catch (error) {
+            alert('Error submitting quiz: ' + error.message);
+        }
+    }
+
+    function displayResults(results) {
+        document.getElementById('score-display').textContent = results.score + '%';
+        document.getElementById('score-text').textContent =
+            `${results.correctAnswers} out of ${results.totalQuestions} correct`;
+
+        const details = document.getElementById('results-details');
+        details.innerHTML = results.details.map(d => `
+            <div class="border-l-4 ${d.correct ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'} p-4 rounded">
+                <div class="flex items-start justify-between">
+                    <p class="font-semibold">${d.number}. ${d.question}</p>
+                    <span class="text-2xl">${d.correct ? '✅' : '❌'}</span>
+                </div>
+                <div class="mt-2 text-sm">
+                    <p>Your answer: <span class="${d.correct ? 'text-green-700' : 'text-red-700'} font-semibold">${d.userAnswer}</span></p>
+                    ${!d.correct ? `<p>Correct answer: <span class="text-green-700 font-semibold">${d.correctAnswer}</span></p>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function resetQuiz() {
+        document.getElementById('quiz-results').classList.add('hidden');
+        document.getElementById('quiz-start').classList.remove('hidden');
+        quizSession = null;
+        quizData = null;
+        userAnswers = {};
+    }
+</script>
+</body>
+</html>

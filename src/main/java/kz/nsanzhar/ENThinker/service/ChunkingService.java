@@ -35,12 +35,10 @@ public class ChunkingService {
                 currentTokens = 0;
             }
 
-            // добавляем предложение в текущий чанк
             currentChunk.append(sentence).append(" ");
             currentTokens += sentenceTokens;
         }
 
-        // добавляем последний чанк
         if (currentChunk.length() > 0) {
             chunks.add(currentChunk.toString().trim());
         }

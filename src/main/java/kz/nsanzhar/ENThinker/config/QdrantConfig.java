@@ -32,7 +32,6 @@ public class QdrantConfig {
     public ApplicationRunner initQdrantCollection(WebClient qdrantClient) {
         return args -> {
             try {
-                // Проверяем существует ли коллекция
                 Boolean exists = qdrantClient.get()
                         .uri("/collections/" + collection)
                         .retrieve()
@@ -42,7 +41,6 @@ public class QdrantConfig {
                         .block();
 
                 if (Boolean.FALSE.equals(exists)) {
-                    // Создаем коллекцию с размерностью 768 для text-embedding-004
                     var collectionConfig = Map.of(
                             "vectors", Map.of(
                                     "size", 768,

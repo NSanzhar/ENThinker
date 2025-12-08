@@ -24,7 +24,6 @@ public class EmbeddingService {
     }
 
     public Mono<float[]> embed(String text) {
-        // Валидация входных данных
         if (text == null || text.isBlank()) {
             return Mono.error(new IllegalArgumentException("Text cannot be empty"));
         }
