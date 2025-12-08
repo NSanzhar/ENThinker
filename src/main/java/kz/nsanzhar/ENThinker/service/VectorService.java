@@ -1,0 +1,79 @@
+package kz.nsanzhar.ENThinker.service;
+
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class VectorService {
+
+    private final WebClient qdrantClient;
+
+    @Value("${qdrant.collection}")
+    private String collection;
+
+    /**
+     * UPSERT with subject
+     */
+    public Mono<Void> upsert(String id, float[] vector, String text, String subject) {
+
+        var payload = new HashMap<String, Object>();
+        payload.put("text", text);
+        payload.put("subject", subject);
+
+        var point = new HashMap<String, Object>();
+        point.put("id", UUID.randomUUID().toString()); // Используем UUID как строку
+        point.put("vector", vector);
+        point.put("payload", payload);
+
+        var body = Map.of("points", List.of(point));
+
+        return qdrantClient.put() // PUT вместо POST для upsert
+                .uri("/collections/" + collection + "/points")
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(Void.class);
+    }
+
+    /**
+     * SEARCH
+     */
+    public Mono<List<SearchResult>> search(float[] vector, int topK) {
+
+        var body = Map.of(
+                "vector", vector,
+                "limit", topK, // limit вместо top
+                "with_payload", true
+        );
+
+        return qdrantClient.post()
+                .uri("/collections/" + collection + "/points/search")
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(SearchResponse.class)
+                .map(resp -> resp.result);
+    }
+
+    // ----- DTOs -----
+
+    @Data
+    public static class SearchResult {
+        public String id;
+        public double score;
+        public Map<String, Object> payload;
+    }
+
+    @Data
+    public static class SearchResponse {
+        public List<SearchResult> result;
+    }
+}
