@@ -9,11 +9,13 @@ import kz.nsanzhar.ENThinker.repository.EntInfoRepo;
 import kz.nsanzhar.ENThinker.repository.KnowledgeRepo;
 import kz.nsanzhar.ENThinker.service.KnowledgeService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/knowledge")
@@ -36,11 +38,13 @@ public class KnowledgeController {
 
     @PostMapping("/migrate")
     public Mono<String> migrateFromDatabase() {
-        return Mono.fromCallable(() -> {
+        log.info("Начало миграции данных из БД в векторное хранилище");
 
+        return Mono.fromCallable(() -> {
             int total = 0;
 
             // 1) Миграция из knowledge_base
+            log.info("Миграция таблицы knowledge_base...");
             List<KnowledgeEntry> knowledgeEntries = knowledgeRepo.findAll();
             int kbCount = 0;
 
@@ -61,13 +65,15 @@ public class KnowledgeController {
                     knowledgeService.ingest(request).block();
                     kbCount++;
                 } catch (Exception e) {
-                    System.err.println("❌ Ошибка миграции записи knowledge_base id=" + entry.getId());
+                    log.error("Ошибка миграции записи knowledge_base id={}: {}", entry.getId(), e.getMessage());
                 }
             }
 
             total += kbCount;
+            log.info("Миграция knowledge_base завершена: {} записей", kbCount);
 
             // 2) Миграция из ent_info
+            log.info("Миграция таблицы ent_info...");
             List<EntInfo> entInfos = entInfoRepo.findAll();
             int entCount = 0;
 
@@ -84,11 +90,13 @@ public class KnowledgeController {
                     knowledgeService.ingest(request).block();
                     entCount++;
                 } catch (Exception e) {
-                    System.err.println("❌ Ошибка миграции записи ent_info id=" + info.getId());
+                    log.error("Ошибка миграции записи ent_info id={}: {}", info.getId(), e.getMessage());
                 }
             }
 
             total += entCount;
+            log.info("Миграция ent_info завершена: {} записей", entCount);
+            log.info("Миграция завершена успешно. Всего обработано: {} записей", total);
 
             return "✅ Миграция завершена. " +
                     "knowledge_base: " + kbCount + " записей, " +
@@ -96,5 +104,4 @@ public class KnowledgeController {
                     "всего: " + total;
         });
     }
-
 }

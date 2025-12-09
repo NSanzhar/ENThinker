@@ -1,5 +1,6 @@
 package kz.nsanzhar.ENThinker.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+@Slf4j
 @Service
 public class EmbeddingService {
 
@@ -52,7 +54,7 @@ public class EmbeddingService {
                     return f;
                 })
                 .onErrorResume(e -> {
-                    System.err.println("❌ Embedding error: " + e.getMessage());
+                    log.error("Ошибка создания эмбеддинга: {}", e.getMessage(), e);
                     return Mono.error(new RuntimeException("Failed to generate embeddings: " + e.getMessage()));
                 });
     }

@@ -5,6 +5,7 @@ import kz.nsanzhar.ENThinker.dto.AskRequest;
 import kz.nsanzhar.ENThinker.dto.RagResponse;
 import kz.nsanzhar.ENThinker.dto.VectorSearchResult;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class KnowledgeService {
@@ -33,21 +35,25 @@ public class KnowledgeService {
                 ? "general"
                 : req.getSubject();
 
+        log.info("Начало загрузки документа. Subject: {}, длина текста: {}", subject, req.getText().length());
+
         var chunks = chunkingService.chunkText(req.getText(), maxTokens);
+        log.debug("Текст разделён на {} чанков", chunks.size());
 
         return Mono.when(
-                chunks.stream()
-                        .map(chunk -> embeddingService.embed(chunk)
-                                .flatMap(embed ->
-                                        vectorService.upsert(
-                                                UUID.randomUUID().toString(),
-                                                embed,
-                                                chunk,
-                                                subject
-                                        )
-                                ))
-                        .toList()
-        );
+                        chunks.stream()
+                                .map(chunk -> embeddingService.embed(chunk)
+                                        .flatMap(embed ->
+                                                vectorService.upsert(
+                                                        UUID.randomUUID().toString(),
+                                                        embed,
+                                                        chunk,
+                                                        subject
+                                                )
+                                        ))
+                                .toList()
+                ).doOnSuccess(v -> log.info("Документ успешно загружен. Subject: {}", subject))
+                .doOnError(e -> log.error("Ошибка загрузки документа: {}", e.getMessage(), e));
     }
 
     public Mono<RagResponse> ask(AskRequest req) {
@@ -58,37 +64,23 @@ public class KnowledgeService {
                 ? req.getMinScore()
                 : scoreThreshold;
 
+        log.info("Поиск ответа на вопрос. TopK: {}, Threshold: {}", topK, threshold);
+        log.debug("Вопрос: {}", question);
+
         return embeddingService.embed(question)
                 .flatMap(vector -> vectorService.search(vector, topK))
                 .flatMap(results -> {
-
-                    // 1. Фильтрация по порогу
                     List<VectorSearchResult> filteredResults = results.stream()
                             .filter(r -> r.getScore() >= threshold)
-                            .toList();
+                            .collect(Collectors.toList());
 
-                    // 2. Дедупликация по subject + text
-                    List<VectorSearchResult> uniqueResults = filteredResults.stream()
-                            .collect(Collectors.toMap(
-                                    r -> {
-                                        Object text = r.getPayload().get("text");
-                                        Object subject = r.getPayload().get("subject");
-                                        String s = (subject != null ? subject.toString() : "general");
-                                        String t = (text != null ? text.toString() : "");
-                                        return s + "||" + t;
-                                    },
-                                    r -> r,
-                                    (existing, duplicate) -> existing // если дубль – оставляем первый
-                            ))
-                            .values()
-                            .stream()
-                            .toList();
+                    log.debug("Найдено {} результатов, после фильтрации: {}", results.size(), filteredResults.size());
 
-                    if (uniqueResults.isEmpty()) {
+                    if (filteredResults.isEmpty()) {
+                        log.warn("Не найдено релевантных результатов для вопроса");
                         return Mono.just(new RagResponse(
-                                "❌ I don't have enough information to answer this question. " +
-                                        "The knowledge base doesn't contain relevant data (found " +
-                                        results.size() + " results, but all had low relevance score < " +
+                                "❌ В моей базе знаний недостаточно информации, чтобы полноценно ответить на этот вопрос. " +
+                                        "Найдено " + results.size() + " результатов, но все имеют низкую релевантность (< " +
                                         threshold + ").",
                                 List.of(),
                                 results.size()
@@ -96,8 +88,7 @@ public class KnowledgeService {
                     }
 
                     StringBuilder context = new StringBuilder();
-
-                    List<RagResponse.SourceInfo> sources = uniqueResults.stream()
+                    List<RagResponse.SourceInfo> sources = filteredResults.stream()
                             .map(result -> {
                                 Object text = result.getPayload().get("text");
                                 Object subject = result.getPayload().get("subject");
@@ -113,28 +104,27 @@ public class KnowledgeService {
                                         result.getId()
                                 );
                             })
-                            .toList();
+                            .collect(Collectors.toList());
 
                     if (context.length() == 0) {
+                        log.warn("Контекст пуст после обработки источников");
                         return Mono.just(new RagResponse(
-                                "❌ I don't have enough information to answer this question.",
+                                "❌ В моей базе знаний недостаточно информации, чтобы полноценно ответить на этот вопрос.",
                                 sources,
                                 results.size()
                         ));
                     }
 
                     return geminiPromptService.askGemini(question, context.toString())
-                            .map(answer -> new RagResponse(
-                                    answer,
-                                    sources,
-                                    uniqueResults.size()   // считаем уже без дублей
-                            ));
+                            .map(answer -> {
+                                log.info("Ответ сгенерирован успешно");
+                                return new RagResponse(answer, sources, results.size());
+                            });
                 })
                 .onErrorResume(e -> {
-                    System.err.println("❌ Error during ask: " + e.getMessage());
-                    e.printStackTrace();
+                    log.error("Ошибка обработки вопроса: {}", e.getMessage(), e);
                     return Mono.just(new RagResponse(
-                            "❌ Sorry, an error occurred while processing your question: " + e.getMessage(),
+                            "❌ Произошла ошибка при обработке вопроса: " + e.getMessage(),
                             List.of(),
                             0
                     ));

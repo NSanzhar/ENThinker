@@ -1,5 +1,6 @@
 package kz.nsanzhar.ENThinker.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,6 +10,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
+@Slf4j
 @Service
 public class GeminiPromptService {
 
@@ -61,7 +63,7 @@ public class GeminiPromptService {
                 .bodyToMono(GeminiResponse.class)
                 .map(resp -> resp.candidates().get(0).content().parts().get(0).text())
                 .onErrorResume(e -> {
-                    System.err.println("❌ Gemini API error: " + e.getMessage());
+                    log.error("Ошибка вызова Gemini API: {}", e.getMessage(), e);
                     return Mono.just("❌ Ошибка при обращении к модели ИИ. Попробуйте ещё раз.");
                 });
     }
